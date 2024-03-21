@@ -10,13 +10,20 @@ use Symfony\Component\Console\Formatter\OutputFormatterStyle;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Helper\Table as TableHelper;
 use Symfony\Component\Console\Helper\TableSeparator;
+use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Process;
 
 class TableOutput implements Output
 {
-    /** @var int|null */
-    private $doneTasksRows;
+    private ?int $doneTasksRows;
+    private ?ConsoleSectionOutput $section = null;
+    private ?BufferedOutput $buffer = null;
+    private float $lastOverwrite = 0;
 
     public function __construct(?int $doneTasksRows = null)
     {
@@ -51,11 +58,25 @@ class TableOutput implements Output
         $output->getFormatter()->setStyle('green', new OutputFormatterStyle('green'));
         $output->getFormatter()->setStyle('yellow', new OutputFormatterStyle('yellow'));
 
-        $this->clearScreen($output);
+        if ($output instanceof ConsoleOutputInterface) {
+            $this->section ??= $output->section();
+            $this->buffer ??= new BufferedOutput($output->getVerbosity(), $output->isDecorated(), $output->getFormatter());
+            $output = $this->buffer;
+            if (microtime(true) - $this->lastOverwrite < 0.1) {
+                return;
+            }
+        } else {
+            $this->clearScreen($output);
+        }
 
         list($stacked, $running, $done) = $this->filterTasks($data);
         $this->renderStackedTable($output, $stacked, $running);
         $this->renderMainTable($output, $data, $running, $done, $elapsedTime);
+
+        if ($this->section !== null) {
+            $this->section->overwrite(explode("\n", $output->fetch()));
+            $this->lastOverwrite = microtime(true);
+        }
     }
 
     /**
@@ -65,7 +86,12 @@ class TableOutput implements Output
      */
     public function finishMessage(OutputInterface $output, array $data, float $duration): void
     {
-        $output->writeln('');
+        $this->lastOverwrite = 0;
+        $this->printToOutput($output, $data, $duration);
+        unset($this->section);
+
+        $io = new SymfonyStyle(new StringInput(''), $output);
+        $io->success('Parallel task processing finished in '. TimeHelper::formatTime($duration));
     }
 
     /**
@@ -125,10 +151,26 @@ class TableOutput implements Output
      * @param TaskData[] $done
      * @param float $elapsedTime
      */
-    private function renderMainTable(OutputInterface $output, array $all, array $running, array $done, float $elapsedTime): void
-    {
+    private function renderMainTable(
+        OutputInterface $output,
+        array $all,
+        array $running,
+        array $done,
+        float $elapsedTime
+    ): void {
 
-        $headers = ['Title', 'Total', 'Success', 'Skipped', 'Error', 'Warnings', 'Progress', 'Time', 'Memory', 'Message'];
+        $headers = [
+            'Title',
+            'Total',
+            'Success',
+            'Skipped',
+            'Error',
+            'Warnings',
+            'Progress',
+            'Time',
+            'Memory',
+            'Message'
+        ];
         $table = new TableHelper($output);
         $table
             ->setHeaders($headers);
@@ -153,7 +195,7 @@ class TableOutput implements Output
             number_format($total['skip']),
             number_format($total['error']),
             number_format($total['code_errors']),
-            'Saved time: ' . TimeHelper::formatTime(max($total['duration'] - (int) $elapsedTime, 0)),
+            'Saved time: ' . TimeHelper::formatTime(max($total['duration'] - (int)$elapsedTime, 0)),
             TimeHelper::formatTime($elapsedTime),
             '',
             ''
@@ -330,7 +372,7 @@ class TableOutput implements Output
      */
     private function formatMemory(TaskData $taskData, int $maxMemory): string
     {
-        $memoryIndex = $taskData->getMemoryPeak()/$maxMemory;
+        $memoryIndex = $taskData->getMemoryPeak() / $maxMemory;
         $text = DataHelper::convertBytes($taskData->getMemoryUsage()) . ' (' . DataHelper::convertBytes($taskData->getMemoryPeak()) . ')';
 
         if ($memoryIndex > 3) {

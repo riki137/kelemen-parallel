@@ -7,6 +7,7 @@
 - Multiple tasks (same task added multiple times with different name)
 
 ### Fixed
+- Flickering of table output significantly reduced!
 - PHP Deprecated: Implicit conversion from float to int loses precision
 
 ## 2.2.0 - 2021-11-02
