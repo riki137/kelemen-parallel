@@ -102,12 +102,12 @@ class TableOutput implements Output
         $this->renderMainTable($data, $running, $done, $elapsedTime);
 
         if ($this->section !== null) {
-            $this->section->overwrite(explode("\n", $this->buffer->fetch()));
-            $this->lastOverwrite = microtime(true);
+            $this->section->overwrite($this->buffer->fetch());
         } else {
             $this->output->writeln("\033[2J\033[;H"); // clear screen
-            $this->output->write($this->buffer->fetch());
+            $this->output->writeln($this->buffer->fetch());
         }
+        $this->lastOverwrite = microtime(true);
     }
 
     /**
@@ -119,13 +119,11 @@ class TableOutput implements Output
     {
         $this->lastOverwrite = 0;
         $this->printToOutput($data, $duration);
-        unset($this->section);
 
         $this->io->success('Parallel task processing finished in ' . TimeHelper::formatTime($duration));
     }
 
     /**
-     * @param OutputInterface $output
      * @param TaskData[] $stacked
      * @param TaskData[] $running
      */
