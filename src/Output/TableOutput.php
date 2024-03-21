@@ -16,66 +16,97 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Process\Process;
 
 class TableOutput implements Output
 {
     private ?int $doneTasksRows;
-    private ?ConsoleSectionOutput $section = null;
-    private ?BufferedOutput $buffer = null;
     private float $lastOverwrite = 0;
+
+    private OutputInterface $output;
+    private BufferedOutput $buffer;
+    private SymfonyStyle $io;
+    private ?ConsoleSectionOutput $section = null;
+
+    private TableHelper $stackedTable;
+    private TableHelper $mainTable;
 
     public function __construct(?int $doneTasksRows = null)
     {
         $this->doneTasksRows = $doneTasksRows;
     }
 
+    public function setOutput(OutputInterface $output): void
+    {
+        $output->getFormatter()->setStyle('red', new OutputFormatterStyle('red'));
+        $output->getFormatter()->setStyle('green', new OutputFormatterStyle('green'));
+        $output->getFormatter()->setStyle('yellow', new OutputFormatterStyle('yellow'));
+
+        $this->output = $output;
+        $this->buffer = new BufferedOutput($output->getVerbosity(), $output->isDecorated(), $output->getFormatter());
+        $this->io = new SymfonyStyle(new StringInput(''), $output);
+        if ($output instanceof ConsoleOutputInterface) {
+            $this->section = $output->section();
+        }
+
+
+        $this->mainTable = new TableHelper($output);
+        $this->mainTable->setHeaders([
+            'Title',
+            'Total',
+            'Success',
+            'Skipped',
+            'Error',
+            'Warnings',
+            'Progress',
+            'Time',
+            'Memory',
+            'Message'
+        ]);
+
+        $this->stackedTable = new TableHelper($output);
+        $this->stackedTable
+            ->setHeaders(['Title', 'Waiting for']);
+    }
+
     /**
      * @param OutputInterface $output
      */
-    public function startMessage(OutputInterface $output): void
+    public function startMessage(): void
     {
-        $output->writeln("\nStarting parallel task processing ...\n");
+        $this->io->info("Starting parallel task processing ...");
     }
 
     /**
      * @param OutputInterface $output
      * @param string $error
      */
-    public function errorMessage(OutputInterface $output, string $error): void
+    public function errorMessage(string $error): void
     {
-        $output->writeln("\n<error>" . $error . "</error>\n");
+        $this->io->error($error);
     }
 
     /**
-     * @param OutputInterface $output
      * @param array $data
      * @param float $elapsedTime
      */
-    public function printToOutput(OutputInterface $output, array $data, float $elapsedTime): void
+    public function printToOutput(array $data, float $elapsedTime): void
     {
-        $output->getFormatter()->setStyle('red', new OutputFormatterStyle('red'));
-        $output->getFormatter()->setStyle('green', new OutputFormatterStyle('green'));
-        $output->getFormatter()->setStyle('yellow', new OutputFormatterStyle('yellow'));
-
-        if ($output instanceof ConsoleOutputInterface) {
-            $this->section ??= $output->section();
-            $this->buffer ??= new BufferedOutput($output->getVerbosity(), $output->isDecorated(), $output->getFormatter());
-            $output = $this->buffer;
-            if (microtime(true) - $this->lastOverwrite < 0.1) {
-                return;
-            }
-        } else {
-            $this->clearScreen($output);
+        if (microtime(true) - $this->lastOverwrite < 0.1) {
+            return;
         }
 
         list($stacked, $running, $done) = $this->filterTasks($data);
-        $this->renderStackedTable($output, $stacked, $running);
-        $this->renderMainTable($output, $data, $running, $done, $elapsedTime);
+        if ($this->output->isDebug()) {
+            $this->renderStackedTable($stacked, $running);
+        }
+        $this->renderMainTable($data, $running, $done, $elapsedTime);
 
         if ($this->section !== null) {
-            $this->section->overwrite(explode("\n", $output->fetch()));
+            $this->section->overwrite(explode("\n", $this->buffer->fetch()));
             $this->lastOverwrite = microtime(true);
+        } else {
+            $this->output->writeln("\033[2J\033[;H"); // clear screen
+            $this->output->write($this->buffer->fetch());
         }
     }
 
@@ -84,24 +115,13 @@ class TableOutput implements Output
      * @param array $data
      * @param float $duration
      */
-    public function finishMessage(OutputInterface $output, array $data, float $duration): void
+    public function finishMessage(array $data, float $duration): void
     {
         $this->lastOverwrite = 0;
-        $this->printToOutput($output, $data, $duration);
+        $this->printToOutput($data, $duration);
         unset($this->section);
 
-        $io = new SymfonyStyle(new StringInput(''), $output);
-        $io->success('Parallel task processing finished in '. TimeHelper::formatTime($duration));
-    }
-
-    /**
-     * @param OutputInterface $output
-     */
-    private function clearScreen(OutputInterface $output): void
-    {
-        $process = new Process(['clear']);
-        $process->run();
-        $output->writeln($process->getOutput());
+        $this->io->success('Parallel task processing finished in ' . TimeHelper::formatTime($duration));
     }
 
     /**
@@ -109,20 +129,14 @@ class TableOutput implements Output
      * @param TaskData[] $stacked
      * @param TaskData[] $running
      */
-    private function renderStackedTable(OutputInterface $output, array $stacked, array $running): void
+    private function renderStackedTable(array $stacked, array $running): void
     {
-        if (!$output->isDebug()) {
-            return;
-        }
-
         if (!count($stacked)) {
             return;
         }
 
-        $headers = ['Title', 'Waiting for'];
-        $table = new TableHelper($output);
-        $table
-            ->setHeaders($headers);
+        $table = $this->stackedTable;
+        $table->setRows([]);
 
         foreach ($stacked as $rowTitle => $row) {
             // Mark currently running tasks
@@ -152,28 +166,14 @@ class TableOutput implements Output
      * @param float $elapsedTime
      */
     private function renderMainTable(
-        OutputInterface $output,
         array $all,
         array $running,
         array $done,
         float $elapsedTime
     ): void {
 
-        $headers = [
-            'Title',
-            'Total',
-            'Success',
-            'Skipped',
-            'Error',
-            'Warnings',
-            'Progress',
-            'Time',
-            'Memory',
-            'Message'
-        ];
-        $table = new TableHelper($output);
-        $table
-            ->setHeaders($headers);
+        $table = $this->mainTable;
+        $table->setRows([]);
 
         $total = [
             'count' => 0,
