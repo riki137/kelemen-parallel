@@ -49,7 +49,7 @@ class TableOutput implements Output
         }
 
 
-        $this->mainTable = new TableHelper($output);
+        $this->mainTable = new TableHelper($this->buffer);
         $this->mainTable->setHeaders([
             'Title',
             'Total',
@@ -63,7 +63,7 @@ class TableOutput implements Output
             'Message'
         ]);
 
-        $this->stackedTable = new TableHelper($output);
+        $this->stackedTable = new TableHelper($this->buffer);
         $this->stackedTable
             ->setHeaders(['Title', 'Waiting for']);
     }
@@ -102,10 +102,9 @@ class TableOutput implements Output
         $this->renderMainTable($data, $running, $done, $elapsedTime);
 
         if ($this->section !== null) {
-            $this->section->overwrite($this->buffer->fetch());
+            $this->section->overwrite($this->buffer->fetch()."\n");
         } else {
-            $this->output->writeln("\033[2J\033[;H"); // clear screen
-            $this->output->writeln($this->buffer->fetch());
+            $this->output->writeln(["\033[2J\033[;H", $this->buffer->fetch()]);
         }
         $this->lastOverwrite = microtime(true);
     }
