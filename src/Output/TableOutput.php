@@ -7,6 +7,7 @@ use Parallel\Helper\TimeHelper;
 use Parallel\TaskData;
 use Parallel\TaskStack\StackedTask;
 use Symfony\Component\Console\Formatter\OutputFormatterStyle;
+use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Helper\Table as TableHelper;
 use Symfony\Component\Console\Helper\TableSeparator;
@@ -61,13 +62,11 @@ class TableOutput implements Output
             'Time',
             'Memory',
             'Message'
-        ])->setColumnMaxWidth(9, 24)
-        ;
+        ])->setColumnMaxWidth(9, 24);
 
         $this->stackedTable = new TableHelper($this->buffer);
         $this->stackedTable
-            ->setHeaders(['Title', 'Waiting for'])
-        ;
+            ->setHeaders(['Title', 'Waiting for']);
     }
 
     /**
@@ -104,7 +103,7 @@ class TableOutput implements Output
         $this->renderMainTable($data, $running, $done, $elapsedTime);
 
         if ($this->section !== null) {
-            $this->section->overwrite($this->buffer->fetch()."\n");
+            $this->section->overwrite($this->buffer->fetch() . "\n");
         } else {
             $this->output->writeln(["\033[2J\033[;H", $this->buffer->fetch()]);
         }
@@ -241,7 +240,7 @@ class TableOutput implements Output
                 number_format($row->getExtra('error', 0)),
                 number_format($row->getCodeErrorsCount()),
                 $this->progress($row->getProgress()),
-                TimeHelper::formatTime($row->getDuration()) . ' / ' . TimeHelper::formatTime($row->getEstimated()),
+                TimeHelper::formatTime($row->getDuration()) . '/' . TimeHelper::formatTime($row->getEstimated()),
                 $this->formatMemory($row, $avgMemoryUsage),
                 $row->getExtra('message', '')
             ]);
@@ -307,25 +306,20 @@ class TableOutput implements Output
         }
     }
 
-    /**
-     * @param float $progress
-     * @param int $maxSteps
-     * @return string
-     */
-    private function progress(float $progress, int $maxSteps = 20): string
+    private function progress(float $percent): string
     {
-        $result = '';
-        $roundedProgress = round($progress / (100 / $maxSteps));
-        for ($i = 1; $i <= $maxSteps; $i++) {
-            if ($roundedProgress > $i || $roundedProgress == $maxSteps) {
-                $result .= '=';
-            } elseif ($roundedProgress == $i) {
-                $result .= '>';
-            } else {
-                $result .= '-';
-            }
-        }
-        return $result . ' ' . number_format($progress) . '%';
+        $width = 20;
+        $percent = min($percent, 100);
+        $fullBlocks = floor($percent / 100 * $width);
+        $partialBlock = round(fmod($percent / 100 * $width, 1) * $width);
+
+        return "<fg=green>" .
+            str_repeat('▓', $fullBlocks) .
+            str_repeat('▒', $partialBlock >= .5 ? 1 : 0) .
+            str_repeat('░', ($partialBlock > 0 && $partialBlock < .5) ? 1 : 0) .
+            '</>' .
+            str_repeat('·', $width - $fullBlocks - ($partialBlock > 0 ? 1 : 0)) .
+            str_pad(number_format($percent), 5, ' ', STR_PAD_LEFT) . '%';
     }
 
     /**
