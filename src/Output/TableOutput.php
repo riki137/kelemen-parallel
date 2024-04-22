@@ -61,7 +61,7 @@ class TableOutput implements Output
             'Time',
             'Memory',
             'Message'
-        ])->setColumnMaxWidth(9, 10)
+        ])->setColumnMaxWidth(9, 24)
         ;
 
         $this->stackedTable = new TableHelper($this->buffer);
