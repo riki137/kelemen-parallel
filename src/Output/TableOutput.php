@@ -51,21 +51,23 @@ class TableOutput implements Output
 
         $this->mainTable = new TableHelper($this->buffer);
         $this->mainTable->setHeaders([
-            'Title',
-            'Total',
-            'Success',
-            'Skipped',
-            'Error',
-            'Warnings',
+            'Task',
+            'All',
+            'OK',
+            'SKP',
+            'ERR',
+            'WRN',
             'Progress',
             'Time',
             'Memory',
             'Message'
-        ]);
+        ])->setColumnMaxWidth(9, 10)
+        ;
 
         $this->stackedTable = new TableHelper($this->buffer);
         $this->stackedTable
-            ->setHeaders(['Title', 'Waiting for']);
+            ->setHeaders(['Title', 'Waiting for'])
+        ;
     }
 
     /**
@@ -370,7 +372,7 @@ class TableOutput implements Output
     private function formatMemory(TaskData $taskData, int $maxMemory): string
     {
         $memoryIndex = $taskData->getMemoryPeak() / $maxMemory;
-        $text = DataHelper::convertBytes($taskData->getMemoryUsage()) . ' (' . DataHelper::convertBytes($taskData->getMemoryPeak()) . ')';
+        $text = DataHelper::convertBytes($taskData->getMemoryUsage()) . '/' . DataHelper::convertBytes($taskData->getMemoryPeak());
 
         if ($memoryIndex > 3) {
             return "<red>$text</red>";
