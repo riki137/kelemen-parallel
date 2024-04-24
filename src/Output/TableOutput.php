@@ -313,10 +313,12 @@ class TableOutput implements Output
         $fullBlocks = floor($percent / 100 * $width);
         $partialBlock = round(fmod($percent / 100 * $width, 1) * $width);
 
+        $chars = ['▘', '▌', '▛', '█'];
         return "<fg=green>" .
-            str_repeat('▓', $fullBlocks) .
-            str_repeat('▒', $partialBlock >= .5 ? 1 : 0) .
-            str_repeat('░', ($partialBlock > 0 && $partialBlock < .5) ? 1 : 0) .
+            str_repeat($chars[3], $fullBlocks) .
+            str_repeat($chars[2], $partialBlock >= .66 ? 1 : 0) .
+            str_repeat($chars[1], ($partialBlock >= .33 && $partialBlock < .66) ? 1 : 0) .
+            str_repeat($chars[0], ($partialBlock > 0 && $partialBlock < .33) ? 1 : 0) .
             '</>' .
             str_repeat('·', $width - $fullBlocks - ($partialBlock > 0 ? 1 : 0)) .
             str_pad(number_format($percent), 5, ' ', STR_PAD_LEFT) . '%';
