@@ -57,8 +57,8 @@ class TableOutput implements Output
             'Progress',
             'Count',
             '<yellow>Skip</>',
-            '<red>Err</>',
-            '<yellow>Wrn</>',
+            '<fg=red;options=bold>Err</>',
+            '<fg=yellow;options=bold>Wrn</>',
             'Time',
             'Memory'
         ])->setColumnWidths([1, 1, 1, 1, 1, 1, 1]);

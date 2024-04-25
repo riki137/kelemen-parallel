@@ -8,6 +8,9 @@
 
 ### Fixed
 - Flickering of table output significantly reduced!
+- Flickering of table output significantly reduced!
+- Progress bar shows fractional progress
+- Summary table on finish instead of done tasks
 - PHP Deprecated: Implicit conversion from float to int loses precision
 
 ## 2.2.0 - 2021-11-02
